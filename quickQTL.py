@@ -8,6 +8,7 @@ from scipy import stats
 import pandas as pd
 from matplotlib import pyplot as plt
 
+import dask.dataframe as dd
 import click
 
 
@@ -80,9 +81,9 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     A dash ('-') can be substituted OUTFILE to write to stdout.
     """
 
-    genos = pd.read_csv(genotypes)
-    phenos = pd.read_csv(phenotypes)
-    chroms = pd.read_csv(chromosomes)
+    genos = dd.read_csv(genotypes)
+    phenos = dd.read_csv(phenotypes)
+    chroms = dd.read_csv(chromosomes)
 
     genos.drop(set(genos.columns[2:]) - set(phenos.Sample_Name), axis=1, inplace=True)
 
