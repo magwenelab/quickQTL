@@ -10,6 +10,10 @@ from matplotlib import pyplot as plt
 
 import click
 
+from pandarallel import pandarallel
+
+pandarallel.initialize()
+
 
 def calculate_association_stats(genotypes, phenotypes, focal_phenotype=None):
 
@@ -65,6 +69,11 @@ def plot_log10pval(association_stats, chroms):
     return fig, ax
 
 
+def anova_by_geno(g, phenotype=""):
+    sites = [i[-1] for i in g.groupby("Genotype")[phenotype]]
+    return stats.f_oneway(*sites).pvalue
+
+
 @click.command()
 @click.argument("genotypes", type=click.File("r"))
 @click.argument("phenotypes", type=click.File("r"))
@@ -86,9 +95,18 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
 
     genos.drop(set(genos.columns[2:]) - set(phenos.Sample_Name), axis=1, inplace=True)
 
+    long_genos = genos.melt(
+        id_vars=["Chromosome", "Coordinate"],
+        var_name="Sample_Name",
+        value_name="Genotype",
+    )
+    combined = long_genos.merge(phenos, on="Sample_Name")
+    by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
+    # pvalues = by_chrom_coord.parallel_apply(anova_by_geno, phenotype="mean_Halo")
+
     # phenos.drop(set(phenos.Sample_Name) - set(genos.columns[2:]), axis=0, inplace=True)
 
-    qtl_stats = calculate_association_stats(genos, phenos, None)
+    # qtl_stats = calculate_association_stats(genos, phenos, None)
     # qtl_stats.to_csv(outfile, index=False)
 
     # fig, ax = plot_log10pval(qtl_stats, chroms)
