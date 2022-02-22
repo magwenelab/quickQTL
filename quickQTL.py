@@ -100,12 +100,14 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
 
     combined = long_genos.merge(phenos, on="Sample_Name")
 
-    by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
-    pvalues = by_chrom_coord.apply(
-        anova_by_geno, phenotype="Phenotype_01", meta=("float")
-    )
+    combined.repartition(npartitions=8)
 
-    pvalues.compute().to_csv(outfile)
+    by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
+    # pvalues = by_chrom_coord.apply(
+    #     anova_by_geno, phenotype="Phenotype_01", meta=("float")
+    # )
+
+    # pvalues.compute().to_csv(outfile)
 
     # qtl_stats = calculate_association_stats(genos, phenos, None)
     # qtl_stats.to_csv(outfile, index=False)
