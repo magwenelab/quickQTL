@@ -101,8 +101,12 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
         value_name="Genotype",
     )
     combined = long_genos.merge(phenos, on="Sample_Name")
+    print(combined.columns)
+    combined.drop("Sample_Name", axis=1, inplace=True)
     by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
-    # pvalues = by_chrom_coord.parallel_apply(anova_by_geno, phenotype="mean_Halo")
+    pvalues = by_chrom_coord.parallel_apply(anova_by_geno, phenotype="mean_Halo")
+    pvalues.name = "Pvalue"
+    pvalues.to_csv(outfile)
 
     # phenos.drop(set(phenos.Sample_Name) - set(genos.columns[2:]), axis=0, inplace=True)
 
