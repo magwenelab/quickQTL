@@ -90,6 +90,7 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
 
     genos = dd.read_csv(genotypes, blocksize=8e6)
     phenos = dd.read_csv(phenotypes)
+    phenos.repartition(npartitions=1)
     chroms = dd.read_csv(chromosomes)
 
     genos = genos.drop(set(genos.columns[2:]) - set(phenos.Sample_Name), axis=1)
@@ -103,7 +104,7 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     combined = long_genos.merge(phenos, on="Sample_Name")
     combined = combined.drop("Sample_Name", axis=1)
 
-    combined.repartition(npartitions=128)
+    # combined.repartition(npartitions=128)
 
     by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
     pvalues = by_chrom_coord.apply(anova_by_geno, phenotype="mean_Halo", meta=("float"))
