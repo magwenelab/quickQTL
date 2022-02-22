@@ -101,6 +101,7 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     )
 
     combined = long_genos.merge(phenos, on="Sample_Name")
+    combined = combined.drop("Sample_Name", axis=1)
 
     combined.repartition(npartitions=128)
 
