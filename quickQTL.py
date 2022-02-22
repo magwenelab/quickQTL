@@ -66,10 +66,15 @@ def plot_log10pval(association_stats, chroms):
     return fig, ax
 
 
+def anova_by_geno(g, phenotype=""):
+    sites = [i[-1] for i in g.groupby("Genotype")[phenotype]]
+    return stats.f_oneway(*sites).pvalue
+
+
 @click.command()
-@click.argument("genotypes", type=click.File("r"))
-@click.argument("phenotypes", type=click.File("r"))
-@click.argument("chromosomes", type=click.File("r"))
+@click.argument("genotypes", type=click.Path(exists=True))
+@click.argument("phenotypes", type=click.Path(exists=True))
+@click.argument("chromosomes", type=click.Path(exists=True))
 @click.argument("outfile", type=click.File("w"))
 def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     """Carry out simple QTL mapping for haploid individuals.
@@ -85,15 +90,28 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     phenos = dd.read_csv(phenotypes)
     chroms = dd.read_csv(chromosomes)
 
-    genos.drop(set(genos.columns[2:]) - set(phenos.Sample_Name), axis=1, inplace=True)
+    genos = genos.drop(set(genos.columns[2:]) - set(phenos.Sample_Name), axis=1)
 
-    # phenos.drop(set(phenos.Sample_Name) - set(genos.columns[2:]), axis=0, inplace=True)
+    long_genos = genos.melt(
+        id_vars=["Chromosome", "Coordinate"],
+        var_name="Sample_Name",
+        value_name="Genotype",
+    )
 
-    qtl_stats = calculate_association_stats(genos, phenos, None)
-    qtl_stats.to_csv(outfile, index=False)
+    combined = long_genos.merge(phenos, on="Sample_Name")
 
-    fig, ax = plot_log10pval(qtl_stats, chroms)
-    plt.show()
+    by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
+    pvalues = by_chrom_coord.apply(
+        anova_by_geno, phenotype="Phenotype_01", meta=("float")
+    )
+
+    pvalues.compute().to_csv(outfile)
+
+    # qtl_stats = calculate_association_stats(genos, phenos, None)
+    # qtl_stats.to_csv(outfile, index=False)
+
+    # fig, ax = plot_log10pval(qtl_stats, chroms)
+    # plt.show()
 
 
 if __name__ == "__main__":
