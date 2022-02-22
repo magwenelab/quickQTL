@@ -89,7 +89,7 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     # phenos.drop(set(phenos.Sample_Name) - set(genos.columns[2:]), axis=0, inplace=True)
 
     qtl_stats = calculate_association_stats(genos, phenos, None)
-    qtl_stats.to_csv(outfile, index=False)
+    # qtl_stats.to_csv(outfile, index=False)
 
     # fig, ax = plot_log10pval(qtl_stats, chroms)
     # plt.show()
