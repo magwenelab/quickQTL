@@ -9,8 +9,6 @@ from scipy import stats
 import pandas as pd
 from matplotlib import pyplot as plt
 
-import dask
-import dask.dataframe as dd
 import click
 
 
@@ -88,9 +86,9 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     A dash ('-') can be substituted OUTFILE to write to stdout.
     """
 
-    genos = dd.read_csv(genotypes, blocksize=8e6)
-    phenos = dd.read_csv(phenotypes)
-    chroms = dd.read_csv(chromosomes)
+    genos = pd.read_csv(genotypes)
+    phenos = pd.read_csv(phenotypes)
+    chroms = pd.read_csv(chromosomes)
 
     genos = genos.drop(set(genos.columns[2:]) - set(phenos.Sample_Name), axis=1)
 
@@ -103,15 +101,11 @@ def map_qtls(genotypes, phenotypes, chromosomes, outfile):
     combined = long_genos.merge(phenos, on="Sample_Name")
     combined = combined.drop("Sample_Name", axis=1)
 
-    combined.repartition(npartitions=128)
-
     by_chrom_coord = combined.groupby(["Chromosome", "Coordinate"])
-    pvalues = by_chrom_coord.apply(anova_by_geno, phenotype="mean_Halo", meta=("float"))
+    pvalues = by_chrom_coord.apply(anova_by_geno, phenotype="mean_Halo")
     pvalues.name = "Pvalue"
 
-    z = pvalues.compute(num_workers=8)
-
-    z.to_csv(outfile)
+    pvalues.to_csv(outfile)
 
     # qtl_stats = calculate_association_stats(genos, phenos, None)
     # qtl_stats.to_csv(outfile, index=False)
