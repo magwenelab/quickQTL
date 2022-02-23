@@ -26,6 +26,7 @@ Generate an interactive plot from the output of the command above.
 - Pandas
 - Click
 - pandarallel
+- Bokeh
 
 All of these dependencies can be installed via Conda.
 
