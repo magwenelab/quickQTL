@@ -9,6 +9,9 @@ Dead simple QTL mapping for haploids based on per-site t-tests. Returns a plot a
 - Matplotlib
 - Pandas
 - Click
+- pandarallel
+
+All of these dependencies can be installed via Conda.
 
 
 ## Input file specifications
