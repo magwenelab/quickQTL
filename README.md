@@ -1,6 +1,22 @@
 # quickQTL
 
-Dead simple QTL mapping for haploids based on per-site t-tests. Returns a plot and a CSV file of p-values.s
+Dead simple QTL mapping for haploids based on per-site t-tests. Returns a plot and a CSV file of p-values.
+
+## Example usage
+
+Generate a file giving F-statistics and p-values on a per site basis:
+
+```bash
+./quickQTL.py stats example-geno-table.csv example-pheno-table.csv example.out
+```
+
+Generate an interactive plot from the output of the command above.
+
+```bash
+./quickQTL.py plot example.out example-chrom.csv
+```
+
+
 
 ## Dependencies
 
@@ -16,6 +32,7 @@ All of these dependencies can be installed via Conda.
 
 ## Input file specifications
 
+See the include `example-*.csv` files for exemplar versions of these file formats. 
 
 ### Phenotype file
 
@@ -28,7 +45,9 @@ All of these dependencies can be installed via Conda.
 - CSV file with at least 3 columns
 - Column 1: Chromosome Name (header `Chromosome`)
 - Column 2: Coordinate (header `Coordinate`)
-- Column 3:... : Genotypes for `Sample_N` where each Sample_N header matches a Sample_N in the phenotype files
+- Column 3:... : Genotypes for `Sample_N` where each Sample_N header matches a Sample_N in the phenotype files. 
+
+**NOTE:** the order of sample headers in the genotype file does not need to match the order of sample names in the phenotype file.  There can also be samples in the phenotype file that are not in the genotype file and vice versa; those cases are ignored in the analysis.
 
 ### Chromosome file
 - CSV file with exactly 2 columns
