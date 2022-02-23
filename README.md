@@ -1,6 +1,6 @@
 # quickQTL
 
-Dead simple QTL mapping for haploids based on per-site t-tests. Returns a plot and a CSV file of p-values.
+Dead simple QTL mapping for haploids based on per-site test of mean differences by genotype (defaults to ANOVA). Returns a plot and a CSV file of p-values.
 
 ## Example usage
 
