@@ -10,12 +10,23 @@ Generate a file giving F-statistics and p-values on a per site basis:
 ./quickQTL.py stats example-geno-table.csv example-pheno-table.csv example.out
 ```
 
-Generate an interactive plot from the output of the command above.
+Generate an Matplotlib interactive plot from the output of the command above.
 
 ```bash
 ./quickQTL.py plot example.out example-chrom.csv
 ```
 
+Generate an PNG plot without interactive plot (e.g. appropriate from a non-GUI session):
+
+```bash
+./quickQTL.py plot example.out example-chrom.csv --output example.png
+```
+
+Generate an interactive plot via Bokeh:
+
+```bash
+./bokehQTL.py example.out example-chrom.csv
+```
 
 
 ## Dependencies
