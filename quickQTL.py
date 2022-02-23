@@ -137,6 +137,12 @@ def plot(statfile, chromfile, output):
     help="Name of the phenotype column to analyze. Defaults to first column other than Sample_Name.",
 )
 @click.option(
+    "--genos",
+    type=click.Choice(["01", "012", "-11"]),
+    default="01",
+    help="Genotype states that are used for analysis.",
+)
+@click.option(
     "--test",
     type=click.Choice(assoc_test_dict.keys()),
     default="anova",
@@ -145,7 +151,7 @@ def plot(statfile, chromfile, output):
 @click.argument("genotypefile", type=click.Path(exists=True))
 @click.argument("phenotypefile", type=click.Path(exists=True))
 @click.argument("outfile", type=click.File("w"))
-def stats(genotypefile, phenotypefile, outfile, phenoname, test):
+def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test):
     """
     Calculate association statistics between genotype and phenotype.
 
@@ -157,7 +163,18 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, test):
     genodf, phenodf = load_files(genotypefile, phenotypefile)
     if phenoname == "":
         phenoname = phenodf.columns[0]
-    assoc = assoc_test_pandarallel(genodf, phenodf, phenoname, genos=(0, 1), test=test)
+
+    match genos:
+        case "01":
+            genotup = (0, 1)
+        case "012":
+            genotup = (0, 1, 2)
+        case "-11":
+            genotup = (-1, 1)
+        case _:
+            genotup = (0, 1)
+
+    assoc = assoc_test_pandarallel(genodf, phenodf, phenoname, genos=genotup, test=test)
     assoc.to_csv(outfile)
 
 
