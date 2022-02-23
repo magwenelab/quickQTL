@@ -5,6 +5,7 @@ from itertools import cycle
 import numpy as np
 from scipy import stats
 import pandas as pd
+import matplotlib
 from matplotlib import pyplot as plt
 
 import click
@@ -72,10 +73,10 @@ def assoc_test_pandas(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
 
 
 @cli.command()
-@click.option("--show", type=bool, default=True)
-@click.argument("assocfile", type=click.File("w"))
-@click.argument("chromfile", type=click.File("w"))
-def plot(statfile, chromfile, show):
+@click.option("--output", "-o", type=str, default="")
+@click.argument("statfile", type=click.File("r"))
+@click.argument("chromfile", type=click.File("r"))
+def plot(statfile, chromfile, output):
     association_stats = pd.read_csv(statfile)
     chroms = pd.read_csv(chromfile)
 
@@ -85,6 +86,9 @@ def plot(statfile, chromfile, show):
     chroms["Endpoint"] = chroms.Length + chroms.Offset
 
     grouped_stats = association_stats.groupby("Chromosome")
+
+    if bool(output):
+        matplotlib.use("agg")
 
     colorcycle = cycle(plt.cm.Dark2.colors)
     fig, ax = plt.subplots(1, 1)
@@ -102,11 +106,13 @@ def plot(statfile, chromfile, show):
         )
     ax.set_xticks(chroms.Midpoint, labels=chroms.index)
     ax.set_xticks(chroms.Endpoint, minor=True)
+    ax.set_xlabel("Coordinates")
+    ax.set_ylabel("-$\log_{10}$(p-value)")
 
-    if show:
+    if bool(output):
+        plt.savefig(output, format="png", dpi=150)
+    else:
         plt.show()
-
-    return fig, ax
 
 
 @cli.command()
