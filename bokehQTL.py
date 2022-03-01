@@ -1,14 +1,134 @@
 #!/usr/bin/env python
 
+import itertools
+from json import tool
+
+
 import pandas as pd
 import numpy as np
 
 import bokeh.plotting as bplt
 import bokeh.palettes as palletes
 from bokeh.transform import factor_cmap
-from bokeh.models import ColumnDataSource
+
+from bokeh.models import (
+    ColumnDataSource,
+    FixedTicker,
+    Range1d,
+    NumeralTickFormatter,
+    WheelZoomTool,
+    PanTool,
+    HoverTool,
+)
 
 import click
+
+
+@click.group()
+def cli():
+    pass
+
+
+def gff2DF(fname):
+    gff = pd.read_table(
+        fname,
+        comment="#",
+        names=(
+            "Seqid",
+            "Source",
+            "Type",
+            "Start",
+            "End",
+            "Score",
+            "Strand",
+            "Phase",
+            "Attributes",
+        ),
+    )
+    return gff
+
+
+def arrow_patch_coords(start, end, strand, width=5, level=0, rel_arrow_width=0.10):
+    hw = width / 2.0
+    x1, x2 = (start, end) if (strand == "+") else (end, start)
+    delta = abs(end - start) * rel_arrow_width
+    if strand == "+":
+        head_base = max(x1, x2 - delta)
+    elif strand == "-":
+        head_base = min(x1, x2 + delta)
+    else:
+        head_base = x2
+    return (
+        [x1, x1, head_base, x2, head_base, x1],
+        [e + level for e in [-hw, hw, hw, 0, -hw, -hw]],
+    )
+
+
+def chromosome_plot(statfile, chromfile, gfffile, nchrom):
+
+    stats = pd.read_csv(statfile)
+    chroms = pd.read_csv(chromfile)
+    focalchrom = chroms.Chromosome[nchrom - 1]
+    stats = stats[stats.Chromosome == focalchrom]
+    stats["Log10Pvalue"] = -np.log10(stats.Pvalue)
+    maxPval = stats.Log10Pvalue.max()
+
+    gff = gff2DF(gfffile)
+    gff = gff[(gff.Seqid == focalchrom) & (gff.Type == "gene")]
+    gff["FtrID"] = gff.Attributes.str.extract(r"ID=([^;]+);")
+
+    TOOLTIPS = [
+        ("ID", "@FtrID"),
+        ("Type", "@FtrType"),
+        ("start:end", "@start:@end"),
+    ]
+
+    fig = bplt.figure(
+        x_axis_label="Coordinate",
+        y_axis_label="",
+        sizing_mode="stretch_width",
+        tools="pan,box_zoom,reset,save,hover",
+        tooltips=TOOLTIPS,
+    )
+
+    xs, ys = [], []
+
+    for ftr in gff.itertuples():
+        level = maxPval - 2.75 if ftr.Strand == "+" else maxPval + 2.75
+        x, y = arrow_patch_coords(
+            ftr.Start, ftr.End, ftr.Strand, level=level, width=2, rel_arrow_width=0.10
+        )
+        xs.append(x)
+        ys.append(y)
+
+    ftrsource = ColumnDataSource(
+        dict(
+            xs=xs,
+            ys=ys,
+            FtrType=gff.Type,
+            FtrID=gff.FtrID,
+            start=gff.Start,
+            end=gff.End,
+        )
+    )
+
+    fig.patches("xs", "ys", alpha=0.5, source=ftrsource)
+
+    fig.circle(x=stats.Coordinate, y=stats.Log10Pvalue, color="firebrick", alpha=0.5)
+
+    # p.x_range = Range1d(mid - 10000, mid + 10000, bounds=(0, stats.Coordinate.max()))
+    # p.x_range = Range1d(mid - 10000, mid + 10000, bounds=(0, stats.Coordinate.max()))
+    fig.x_range.bounds = (0, stats.Coordinate.max())
+
+    # p.y_range = Range1d(-20, 50)
+    fig.xaxis[0].formatter = NumeralTickFormatter(format="0,0")
+
+    fig.add_tools(WheelZoomTool(dimensions="width"))
+
+    pantool = fig.select_one({"type": PanTool})
+    pantool.dimensions = "width"
+
+    bplt.show(fig)
 
 
 def create_data(statfile, chromfile):
@@ -34,20 +154,22 @@ def manhattan_plot(statsdf, chromsdf, src):
     ]
 
     p = bplt.figure(
-        x_axis_label="Coordinate",
+        x_axis_label="Chromosome",
         y_axis_label="-log10(p-value)",
         sizing_mode="stretch_width",
         tooltips=TOOLTIPS,
     )
 
-    p.xaxis.ticker = chromsdf.PlotMidpoint
+    # p.xaxis.formatter = NumeralTickFormatter(format="0,0")
+    p.xaxis.ticker = FixedTicker(ticks=chromsdf.PlotMidpoint.values, num_minor_ticks=0)
     p.xaxis.major_label_overrides = dict(
-        zip(chromsdf.PlotMidpoint, chromsdf.Chromosome)
+        zip(chromsdf.PlotMidpoint.values, chromsdf.Chromosome)
     )
+    # p.xaxis.major_label_text_font_size = "0pt"  # turn off x-axis tick labels
 
     cmapper = factor_cmap(
         field_name="Chromosome",
-        palette=palletes.Dark2_6,
+        palette=list(palletes.Dark2_8) * 10,  # palletes.Dark2_8,
         factors=chromsdf.Chromosome.unique(),
     )
 
@@ -55,12 +177,21 @@ def manhattan_plot(statsdf, chromsdf, src):
     bplt.show(p)
 
 
-@click.command()
+@cli.command()
 @click.argument("statfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def cli(statfile, chromfile):
+def genomewide(statfile, chromfile):
     stats, chroms, src = create_data(statfile, chromfile)
     manhattan_plot(stats, chroms, src)
+
+
+@cli.command()
+@click.option("--nchrom", "-n", type=int, default=1)
+@click.argument("statfile", type=click.File("r"))
+@click.argument("chromfile", type=click.File("r"))
+@click.argument("gfffile", type=click.File("r"))
+def chromosome(statfile, chromfile, gfffile, nchrom):
+    chromosome_plot(statfile, chromfile, gfffile, nchrom)
 
 
 if __name__ == "__main__":

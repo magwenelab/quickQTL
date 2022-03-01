@@ -128,3 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 xx.out
+bokehQTL.html
+Bt22.26July2021.gff

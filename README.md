@@ -22,12 +22,17 @@ Generate an PNG plot without interactive plot (e.g. appropriate from a non-GUI s
 ./quickQTL.py plot example.out example-chrom.csv --output example.png
 ```
 
-Generate an interactive plot via Bokeh:
+Generate an interactive genome-wide QTL plot via Bokeh:
 
 ```bash
-./bokehQTL.py example.out example-chrom.csv
+./bokehQTL.py genomewide example.out example-chrom.csv
 ```
 
+Generate a plot for a specific QTL in Bokeh, including markers indicating annotated genes:
+
+```bash
+./bokehQTL.py chromosome -n 8 example.out example-chrom.csv example.gff
+```
 
 ## Dependencies
 

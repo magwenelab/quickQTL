@@ -58,6 +58,7 @@ def assoc_test_pandarallel(genodf, phenodf, focalpheno, genos=(0, 1), test="anov
         result_type="expand",
     )
     assoc.columns = ("statistic", "Pvalue")
+    assoc["log10Pvalue"] = -np.log10(assoc.Pvalue)
     return assoc
 
 
@@ -68,7 +69,8 @@ def assoc_test_pandas(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
         axis=1,
         result_type="expand",
     )
-    assoc.columns = ("F", "Pvalue")
+    assoc.columns = ("statistic", "Pvalue")
+    assoc["log10Pvalue"] = -np.log10(assoc.Pvalue)
     return assoc
 
 
@@ -116,7 +118,7 @@ def plot(statfile, chromfile, output):
         grp = grouped_stats.get_group(chrom)
         ax.plot(
             grp.Coordinate + chroms.loc[chrom, "Offset"],
-            -np.log10(grp.Pvalue),
+            grp.log10Pvalue,
             markersize=2,
             marker="o",
             linestyle="None",
