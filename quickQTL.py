@@ -99,7 +99,7 @@ def plot(statfile, chromfile, output):
     See README for formatting requirements.
     """
     association_stats = pd.read_csv(statfile)
-    chroms = pd.read_csv(chromfile)
+    chroms = pd.read_csv(chromfile, na_values = ".")
 
     chroms = chroms.set_index("Chromosome")
     chroms["Offset"] = [0] + chroms.Length[:-1].cumsum().values.tolist()
@@ -128,7 +128,7 @@ def plot(statfile, chromfile, output):
     ax.set_xticks(chroms.Midpoint, labels=chroms.index)
     ax.set_xticks(chroms.Endpoint, minor=True)
     ax.set_xlabel("Coordinates")
-    ax.set_ylabel("-$\log_{10}$(p-value)")
+    ax.set_ylabel(r"-$\log_{10}$(p-value)")
 
     if bool(output):
         plt.savefig(output, format="png", dpi=150)
