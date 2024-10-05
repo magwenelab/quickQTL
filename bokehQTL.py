@@ -73,30 +73,28 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
     stats["Log10Pvalue"] = -np.log10(stats.Pvalue)
     maxPval = stats.Log10Pvalue.max()
 
-    gff = gff2DF(gfffile)
-    gff = gff[(gff.Seqid == focalchrom) & (gff.Type == "gene")]
-    gff["FtrID"] = gff.Attributes.str.extract(r"ID=([^;]+);")
 
-    TOOLTIPS = [
-        ("ID", "@FtrID"),
-        ("Type", "@FtrType"),
-        ("start:end", "@start:@end"),
-    ]
+    gff = gff2DF(gfffile)
+    
+    gff = gff[(gff.Seqid == focalchrom) & ((gff.Type == "gene") | (gff.Type == "protein_coding_gene"))]
+    gff["FtrID"] = gff.Attributes.str.extract(r"ID=([^;]+);")
+    gff["Description"] = gff.Attributes.str.extract(r"description=([^;]+);")
+
+
 
     fig = bplt.figure(
         x_axis_label="Coordinate",
         y_axis_label="",
         sizing_mode="stretch_width",
-        tools="pan,box_zoom,reset,save,hover",
-        tooltips=TOOLTIPS,
+        tools="pan,box_zoom,reset,save",
     )
 
     xs, ys = [], []
 
     for ftr in gff.itertuples():
-        level = maxPval - 2.75 if ftr.Strand == "+" else maxPval + 2.75
+        level = maxPval + 1 if ftr.Strand == "+" else maxPval + 2
         x, y = arrow_patch_coords(
-            ftr.Start, ftr.End, ftr.Strand, level=level, width=2, rel_arrow_width=0.10
+            ftr.Start, ftr.End, ftr.Strand, level=level, width=1, rel_arrow_width=0.10
         )
         xs.append(x)
         ys.append(y)
@@ -107,14 +105,37 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
             ys=ys,
             FtrType=gff.Type,
             FtrID=gff.FtrID,
+            FtrDesc = gff.Description,
             start=gff.Start,
             end=gff.End,
         )
     )
 
-    fig.patches("xs", "ys", alpha=0.5, source=ftrsource)
+    TOOLTIPS_patches = [
+        ("ID", "@FtrID"),
+        ("Type", "@FtrType"),
+        ("start:end", "@start:@end"),
+        ("Desc", "@FtrDesc")
+    ]
+    patches = fig.patches("xs", "ys", alpha=0.5, source=ftrsource)
+    fig.add_tools(HoverTool(renderers=[patches], tooltips=TOOLTIPS_patches, mode="mouse"))
 
-    fig.circle(x=stats.Coordinate, y=stats.Log10Pvalue, color="firebrick", alpha=0.5)
+
+    statsource = ColumnDataSource(
+        dict(
+            xs=stats.Coordinate,
+            ys=stats.Log10Pvalue,
+            Chromosome = stats.Chromosome,
+            Coordinate = stats.Coordinate
+        )
+    )
+    TOOLTIPS_points = [
+        ("Chrom", "@Chromosome"),
+        ("Coord", "@Coordinate"),
+    ]
+    points = fig.scatter(x="xs", y="ys", color="firebrick", alpha=0.5, source=statsource)
+    fig.add_tools(HoverTool(renderers=[points], tooltips=TOOLTIPS_points, mode="mouse"))
+
 
     # p.x_range = Range1d(mid - 10000, mid + 10000, bounds=(0, stats.Coordinate.max()))
     # p.x_range = Range1d(mid - 10000, mid + 10000, bounds=(0, stats.Coordinate.max()))
@@ -160,12 +181,11 @@ def manhattan_plot(statsdf, chromsdf, src):
         tooltips=TOOLTIPS,
     )
 
-    # p.xaxis.formatter = NumeralTickFormatter(format="0,0")
+    p.xaxis.formatter = NumeralTickFormatter(format="0,0")
     p.xaxis.ticker = FixedTicker(ticks=chromsdf.PlotMidpoint.values, num_minor_ticks=0)
     p.xaxis.major_label_overrides = dict(
         zip(chromsdf.PlotMidpoint.values, chromsdf.Chromosome)
     )
-    # p.xaxis.major_label_text_font_size = "0pt"  # turn off x-axis tick labels
 
     cmapper = factor_cmap(
         field_name="Chromosome",
@@ -173,7 +193,10 @@ def manhattan_plot(statsdf, chromsdf, src):
         factors=chromsdf.Chromosome.unique(),
     )
 
-    p.circle(x="PlotCoordinate", y="Log10Pvalue", color=cmapper, source=src)
+    p.scatter(x="PlotCoordinate", y="Log10Pvalue", color = cmapper, source=src)
+
+
+
     bplt.show(p)
 
 
