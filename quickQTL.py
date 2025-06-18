@@ -100,6 +100,16 @@ def means_by_genotype(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
 
 @cli.command()
 @click.option(
+    "--threshold",
+    type=float,
+    default=None,
+    help=("-log10 pvalue at which to draw the significance threshold.")
+)
+@click.option(
+    "--rotlabels",
+    is_flag = True,
+)
+@click.option(
     "--ylim",
     type=float,
     default=None,
@@ -121,7 +131,7 @@ def means_by_genotype(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
 )
 @click.argument("statfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def plot(statfile, chromfile, output, ylim):
+def plot(statfile, chromfile, output, ylim, threshold, rotlabels):
     """
     Create a "manhattan" style plot showing the -log(p-values) per site.
 
@@ -146,10 +156,12 @@ def plot(statfile, chromfile, output, ylim):
     colorcycle = cycle(plt.cm.Dark2.colors)
     fig, ax = plt.subplots(1, 1)
 
+    maxX = 0
     for chrom in chroms.index:
         grp = grouped_stats.get_group(chrom)
+        offset = chroms.loc[chrom, "Offset"]
         ax.plot(
-            grp.Coordinate + chroms.loc[chrom, "Offset"],
+            grp.Coordinate + offset,
             grp.log10Pvalue,
             markersize=2,
             marker="o",
@@ -157,12 +169,22 @@ def plot(statfile, chromfile, output, ylim):
             alpha=0.75,
             color=next(colorcycle),
         )
+        if (grp.Coordinate.max() + offset) > maxX:
+            maxX = grp.Coordinate.max() + offset
     ax.set_xticks(chroms.Midpoint, labels=chroms.index)
     ax.set_xticks(chroms.Endpoint, minor=True)
     ax.set_xlabel("Coordinates")
     ax.set_ylabel(r"-$\log_{10}$(p-value)")
     if ylim:
         ax.set_ylim(0, ylim)
+
+    if threshold:
+        ax.hlines(threshold, 0, maxX, 
+                  alpha = 0.5,
+                  color="black", linestyles="dashed")
+
+    if rotlabels:
+        ax.tick_params(axis='x', labelrotation=45)
 
     if bool(output):
         plt.savefig(output, format="png", dpi=150)
@@ -366,9 +388,70 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test):
     assoc.to_csv(outfile)
 
 
-def freqs(genotypefile, outfile):
-    genotypes_df = pd.read_csv(gfile, index_col=("Chromosome", "Coordinate"))
+def permuted_assoc_max(genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10):
+    max_log10 = []
+    for i in range(n):
+        phenodf[focalpheno] = np.random.permutation(phenodf[focalpheno])
+        stats = assoc_test_pandarallel(genodf, phenodf, focalpheno, genos, test)
+        max_log10.append(float(stats.log10Pvalue.max()))
+    return max_log10
 
+    
+
+
+@cli.command()
+@click.option(
+    "--phenoname",
+    "-p",
+    type=str,
+    default="",
+    help=(
+        "Name of the phenotype column to analyze. "
+        "Defaults to first column other than Sample_Name."
+    ),
+)
+@click.option(
+    "--genos",
+    type=click.Choice(["01", "012", "-11"]),
+    default="01",
+    help="Genotype states that are used for analysis.",
+)
+@click.option(
+    "--test",
+    type=click.Choice(assoc_test_dict.keys()),
+    default="anova",
+    help="Which statistical test of mean differences to apply. Defaults to ANOVA.",
+)
+@click.option(
+    '--n',
+    type=int,
+    default=500,
+    help="Number of permutations to run for estimating EVD of log10 Pvals"
+)
+@click.argument("genotypefile", type=click.Path(exists=True))
+@click.argument("phenotypefile", type=click.Path(exists=True))
+@click.argument("outfile", type=click.File("w"))
+def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n):
+    """
+    Calculate maximum log10 Pvals of permuted  datasets.
+    """
+    genodf, phenodf = load_files(genotypefile, phenotypefile)
+    if phenoname == "":
+        phenoname = phenodf.columns[0]
+
+    if genos == "012":
+        genotup = (0, 1, 2)
+    elif genos == "-11":
+        genotup = (-1, 1)
+    else:
+        genotup = (0, 1)
+
+    max_log10pvals = permuted_assoc_max(genodf, phenodf, phenoname, genos=genotup, test=test, n=n)
+    maxdf = pd.DataFrame({
+        "max_log10Pval":max_log10pvals,
+        }
+        )
+    maxdf.to_csv(outfile, index=False)    
 
 
 
