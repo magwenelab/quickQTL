@@ -3,6 +3,7 @@
 from itertools import cycle
 
 import numpy as np
+import scipy as sp
 from scipy import stats
 import pandas as pd
 import matplotlib
@@ -20,10 +21,12 @@ def cli():
     pass
 
 
-def load_files(genotypefile, phenotypefile):
+def load_files(genotypefile, phenotypefile, missing_geno=None):
     with open(genotypefile, "r") as gfile, open(phenotypefile, "r") as pfile:
 
         genotypes_df = pd.read_csv(gfile, index_col=("Chromosome", "Coordinate"))
+        if missing_geno is not None:
+            genotypes_df.replace(missing_geno, pd.NA, inplace=True)
         phenotypes_df = pd.read_csv(pfile, index_col="Sample_Name")
 
         # reindexing makes phenotype sample order conform to genotype sample order
@@ -39,6 +42,10 @@ assoc_test_dict = {
     "anova": stats.f_oneway,
     "alexander": stats.alexandergovern,
     "kruskal": stats.kruskal,
+    "boschloo": stats.boschloo_exact,
+    "chi2": stats.chi2_contingency,
+    "fisher": stats.fisher_exact,
+    "barnard": stats.barnard_exact,
 }
 
 
@@ -49,6 +56,13 @@ def assoc_by_genotype(genorow, phenodf, focalpheno, genos=(0, 1), test="anova"):
     statistic, pval = assoc_test_dict[test](*groups)
     return statistic, pval
 
+
+def assoc_contingency(genorow, phenodf, focalpheno, test):
+    xtbl = pd.crosstab(genorow.dropna(), phenodf[focalpheno].dropna())
+    result = assoc_test_dict[test](xtbl)
+    return float(result.statistic), float(result.pvalue)
+
+
 def phenomean_by_genotype(genorow, phenodf, focalpheno, genos=(0, 1)):
     groups = [
         phenodf[genorow == i][focalpheno].dropna().values.flatten() for i in genos
@@ -58,12 +72,20 @@ def phenomean_by_genotype(genorow, phenodf, focalpheno, genos=(0, 1)):
 
 
 def assoc_test_pandarallel(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
-    assoc = genodf.parallel_apply(
-        assoc_by_genotype,
-        args=(phenodf, focalpheno, genos, test),
-        axis=1,
-        result_type="expand",
-    )
+    if test in ("chi2","fisher","barnard","boschloo"):
+        assoc = genodf.parallel_apply(
+            assoc_contingency,
+            args=(phenodf, focalpheno, test),
+            axis=1,
+            result_type="expand",
+        )
+    else:
+        assoc = genodf.parallel_apply(
+            assoc_by_genotype,
+            args=(phenodf, focalpheno, genos, test),
+            axis=1,
+            result_type="expand",
+        )
     assoc.columns = ("statistic", "Pvalue")
     assoc["log10Pvalue"] = -np.log10(assoc.Pvalue)
     return assoc
@@ -356,6 +378,12 @@ def phenotype(genotypefile, phenotypefile, outfile, phenoname, genos):
     help="Genotype states that are used for analysis.",
 )
 @click.option(
+    "--missing_geno",
+    type=int,
+    default=-1,
+    help="Indicator used to delineate missing genotypes."
+)
+@click.option(
     "--test",
     type=click.Choice(assoc_test_dict.keys()),
     default="anova",
@@ -364,7 +392,7 @@ def phenotype(genotypefile, phenotypefile, outfile, phenoname, genos):
 @click.argument("genotypefile", type=click.Path(exists=True))
 @click.argument("phenotypefile", type=click.Path(exists=True))
 @click.argument("outfile", type=click.File("w"))
-def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test):
+def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test, missing_geno):
     """
     Calculate association statistics between genotype and phenotype.
 
@@ -373,7 +401,7 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test):
     OUTFILE is the name of the CSV file to write that contains p-values.
     A dash ('-') can be substituted OUTFILE to write to stdout.
     """
-    genodf, phenodf = load_files(genotypefile, phenotypefile)
+    genodf, phenodf = load_files(genotypefile, phenotypefile, missing_geno)
     if phenoname == "":
         phenoname = phenodf.columns[0]
 
@@ -388,15 +416,30 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test):
     assoc.to_csv(outfile)
 
 
-def permuted_assoc_max(genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10):
+def permuted_assoc(genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10, q = 0.95):
     max_log10 = []
+    quant_log10 = []
     for i in range(n):
         phenodf[focalpheno] = np.random.permutation(phenodf[focalpheno])
         stats = assoc_test_pandarallel(genodf, phenodf, focalpheno, genos, test)
         max_log10.append(float(stats.log10Pvalue.max()))
-    return max_log10
+        quant_log10.append(float(stats.log10Pvalue.quantile(q)))
+    return max_log10, quant_log10
 
-    
+
+def permuted_assoc2(outfile, genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10, q = 0.95):
+    above_threshold = []
+    for i in range(n):
+        phenodf[focalpheno] = np.random.permutation(phenodf[focalpheno])
+        tstats = assoc_test_pandarallel(genodf, phenodf, focalpheno, genos, test)
+        qthresh = float(tstats.log10Pvalue.quantile(q))
+        above_threshold += list(tstats.log10Pvalue[tstats.log10Pvalue >= qthresh])
+    df = pd.DataFrame({
+        "extreme_log10Pval":above_threshold})   
+    df.to_csv(outfile, index=False, mode="a")
+    #return above_threshold
+
+        
 
 
 @cli.command()
@@ -428,12 +471,18 @@ def permuted_assoc_max(genodf, phenodf, focalpheno, genos=(0, 1), test="anova", 
     default=500,
     help="Number of permutations to run for estimating EVD of log10 Pvals"
 )
+@click.option(
+    '--q',
+    type=click.FloatRange(0,1),
+    default=0.95,
+    help="Quantile threshold for EVD of log10 Pvals"
+)
 @click.argument("genotypefile", type=click.Path(exists=True))
 @click.argument("phenotypefile", type=click.Path(exists=True))
 @click.argument("outfile", type=click.File("w"))
-def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n):
+def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n, q):
     """
-    Calculate maximum log10 Pvals of permuted  datasets.
+    Calculate max and quant log10 Pvals of permuted  datasets.
     """
     genodf, phenodf = load_files(genotypefile, phenotypefile)
     if phenoname == "":
@@ -446,12 +495,15 @@ def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n):
     else:
         genotup = (0, 1)
 
-    max_log10pvals = permuted_assoc_max(genodf, phenodf, phenoname, genos=genotup, test=test, n=n)
-    maxdf = pd.DataFrame({
-        "max_log10Pval":max_log10pvals,
-        }
-        )
-    maxdf.to_csv(outfile, index=False)    
+
+    #max_log10pvals, quant_log10pvals = permuted_assoc(genodf, phenodf, phenoname, genos=genotup, test=test, n=n, q=q)
+    # maxdf = pd.DataFrame({
+    #     "max_log10Pval":max_log10pvals,
+    #     "quant_log10Pval":quant_log10pvals})
+    extremes = permuted_assoc2(outfile,genodf, phenodf, phenoname, genos=genotup, test=test, n=n, q=q)
+    #maxdf = pd.DataFrame({
+    #    "extreme_log10Pval":extremes})    
+    #maxdf.to_csv(outfile, index=False)    
 
 
 
