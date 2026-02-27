@@ -140,6 +140,16 @@ def means_by_genotype(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
     )
 )
 @click.option(
+    "--dim",
+    nargs=2,
+    type=float,
+    default=(12,4),
+    help=(
+        "Dimensions of the output figure in inches. "
+        "Defaults to 12 inches wide and 4 inches tall."
+    )
+)
+@click.option(
     "--output",
     "-o",
     type=str,
@@ -153,7 +163,7 @@ def means_by_genotype(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
 )
 @click.argument("statfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def plot(statfile, chromfile, output, ylim, threshold, rotlabels):
+def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels):
     """
     Create a "manhattan" style plot showing the -log(p-values) per site.
 
@@ -176,7 +186,7 @@ def plot(statfile, chromfile, output, ylim, threshold, rotlabels):
         matplotlib.use("agg")
 
     colorcycle = cycle(plt.cm.Dark2.colors)
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=dim)
 
     maxX = 0
     for chrom in chroms.index:
@@ -195,7 +205,7 @@ def plot(statfile, chromfile, output, ylim, threshold, rotlabels):
             maxX = grp.Coordinate.max() + offset
     ax.set_xticks(chroms.Midpoint, labels=chroms.index)
     ax.set_xticks(chroms.Endpoint, minor=True)
-    ax.set_xlabel("Coordinates")
+    #ax.set_xlabel("Coordinates")
     ax.set_ylabel(r"-$\log_{10}$(p-value)")
     if ylim:
         ax.set_ylim(0, ylim)
@@ -209,8 +219,10 @@ def plot(statfile, chromfile, output, ylim, threshold, rotlabels):
         ax.tick_params(axis='x', labelrotation=45)
 
     if bool(output):
-        plt.savefig(output, format="png", dpi=150)
+        plt.tight_layout()
+        plt.savefig(output, format="png", dpi=600)
     else:
+        plt.tight_layout()
         plt.show()
 
 
@@ -298,7 +310,7 @@ def plot_phenotype(phenomeanfile, chromfile, output, diff):
             )        
     ax.set_xticks(chroms.Midpoint, labels=chroms.index)
     ax.set_xticks(chroms.Endpoint, minor=True)
-    ax.set_xlabel("Coordinates")
+    #ax.set_xlabel("Coordinates")
     if diff:
         max_abs_diff = max(np.abs(ax.get_ylim()))
         max_x = max(*ax.get_xlim())
@@ -309,7 +321,7 @@ def plot_phenotype(phenomeanfile, chromfile, output, diff):
         ax.set_ylabel(r"Allele-specific means")
 
     if bool(output):
-        plt.savefig(output, format="png", dpi=150)
+        plt.savefig(output, format="png", dpi=600)
     else:
         plt.show()
 
@@ -428,15 +440,14 @@ def permuted_assoc(genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 
 
 
 def permuted_assoc2(outfile, genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10, q = 0.95):
-    above_threshold = []
     for i in range(n):
         phenodf[focalpheno] = np.random.permutation(phenodf[focalpheno])
         tstats = assoc_test_pandarallel(genodf, phenodf, focalpheno, genos, test)
         qthresh = float(tstats.log10Pvalue.quantile(q))
-        above_threshold += list(tstats.log10Pvalue[tstats.log10Pvalue >= qthresh])
-    df = pd.DataFrame({
-        "extreme_log10Pval":above_threshold})   
-    df.to_csv(outfile, index=False, mode="a")
+        above_threshold = tstats.log10Pvalue[tstats.log10Pvalue >= qthresh]
+        df = pd.DataFrame({
+            "extreme_log10Pval":above_threshold})   
+        df.to_csv(outfile, index=False, mode="a", header=False)
     #return above_threshold
 
         
@@ -500,7 +511,7 @@ def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n, q):
     # maxdf = pd.DataFrame({
     #     "max_log10Pval":max_log10pvals,
     #     "quant_log10Pval":quant_log10pvals})
-    extremes = permuted_assoc2(outfile,genodf, phenodf, phenoname, genos=genotup, test=test, n=n, q=q)
+    permuted_assoc2(outfile, genodf, phenodf, phenoname, genos=genotup, test=test, n=n, q=q)
     #maxdf = pd.DataFrame({
     #    "extreme_log10Pval":extremes})    
     #maxdf.to_csv(outfile, index=False)    

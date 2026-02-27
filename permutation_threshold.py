@@ -61,7 +61,7 @@ def permute(infile, outfile, threshold):
     """
     Estimate log10 Pvalue QTL threshold from extreme permuted  log10 Pvals
     """
-    pvals = pd.read_csv(infile)
+    pvals = pd.read_csv(infile, names=["extreme_log10Pval"])
 
     empirical_threshold = pvals.extreme_log10Pval.quantile(threshold)
 
