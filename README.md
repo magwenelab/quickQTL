@@ -16,7 +16,7 @@ Generate an Matplotlib interactive plot from the output of the command above.
 ./quickQTL.py plot example.out example-chrom.csv
 ```
 
-Generate an PNG plot without interactive plot (e.g. appropriate from a non-GUI session):
+Generate an PNG plot non-interactively (e.g. appropriate from a non-GUI session):
 
 ```bash
 ./quickQTL.py plot example.out example-chrom.csv --output example.png
@@ -33,6 +33,25 @@ Generate a plot for a specific QTL in Bokeh, including markers indicating annota
 ```bash
 ./bokehQTL.py chromosome -n 8 example.out example-chrom.csv example.gff
 ```
+
+Calculate mean phenotypes, conditioned on allelic state, at each variable site across the genome:
+
+```bash
+./quickQTL.py phenotype -p Phenotype_01 example-geno-table.csv example-pheno-table.csv example-phenotype-means.out
+```
+
+Plot mean phenotypes, conditioned at allelic state, across the genome:
+
+```bash
+./quickQTL.py plot-phenotype example-phenotype-means.out example-chrom.csv
+```
+
+Plot difference in mean phenotypes, conditioned at allelic state, across the genome:
+
+```bash
+./quickQTL.py plot-phenotype --diff example-phenotype-means.out example-chrom.csv
+```
+
 
 ## Dependencies
 
