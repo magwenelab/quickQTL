@@ -188,6 +188,11 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels):
     colorcycle = cycle(plt.cm.Dark2.colors)
     fig, ax = plt.subplots(1, 1, figsize=dim)
 
+    if threshold:
+        ax.axhline(threshold, #0, maxX, 
+                  alpha = 0.5,
+                  color="black", linestyle="dashed")    
+
     maxX = 0
     for chrom in chroms.index:
         grp = grouped_stats.get_group(chrom)
@@ -210,10 +215,7 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels):
     if ylim:
         ax.set_ylim(0, ylim)
 
-    if threshold:
-        ax.hlines(threshold, 0, maxX, 
-                  alpha = 0.5,
-                  color="black", linestyles="dashed")
+
 
     if rotlabels:
         ax.tick_params(axis='x', labelrotation=45)
@@ -477,16 +479,16 @@ def permuted_assoc2(outfile, genodf, phenodf, focalpheno, genos=(0, 1), test="an
     help="Which statistical test of mean differences to apply. Defaults to ANOVA.",
 )
 @click.option(
-    '--n',
+    '-n',
     type=int,
     default=500,
-    help="Number of permutations to run for estimating EVD of log10 Pvals"
+    help="Number of permutations to run for estimating EVD of log10 Pvals. Default=500."
 )
 @click.option(
-    '--q',
+    '-q',
     type=click.FloatRange(0,1),
     default=0.95,
-    help="Quantile threshold for EVD of log10 Pvals"
+    help="Quantile threshold for EVD of log10 Pvals. Default=0.95."
 )
 @click.argument("genotypefile", type=click.Path(exists=True))
 @click.argument("phenotypefile", type=click.Path(exists=True))
@@ -515,6 +517,27 @@ def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n, q):
     #maxdf = pd.DataFrame({
     #    "extreme_log10Pval":extremes})    
     #maxdf.to_csv(outfile, index=False)    
+
+
+@cli.command()
+@click.argument("genotypefile", type=click.Path(exists=True))
+@click.argument("phenotypefile", type=click.Path(exists=True))
+def report(genotypefile, phenotypefile):
+    """Report on the number of samples and variable sites in the genotype and phenotype files.
+
+    Gives both raw numbers and number in the intersection of samples in both files.
+    """
+    genodf = pd.read_csv(genotypefile, index_col=("Chromosome", "Coordinate"))
+    phenodf = pd.read_csv(phenotypefile, index_col="Sample_Name")
+    n_raw_geno_samples = len(genodf.columns)
+    n_raw_pheno_samples = len(phenodf)
+    n_raw_geno_sites = len(genodf)
+    n_sample_intersection = len(set(genodf.columns).intersection(set(phenodf.index)))
+    click.echo(f"Number of samples in genotype file: {n_raw_geno_samples}")
+    click.echo(f"Number of samples in phenotype file: {n_raw_pheno_samples}")
+    click.echo(f"Number of samples in intersection of genotype and phenotype files: {n_sample_intersection}")
+    click.echo(f"Number of variable sites in genotype file: {n_raw_geno_sites}")
+    
 
 
 
