@@ -21,13 +21,14 @@ def cli():
     pass
 
 
-def load_files(genotypefile, phenotypefile, missing_geno=None):
+def load_files(genotypefile, phenotypefile, missing_geno=None, 
+               genoindex=("Chromosome", "Coordinate"), phenoindex="Sample_Name"):
     with open(genotypefile, "r") as gfile, open(phenotypefile, "r") as pfile:
 
-        genotypes_df = pd.read_csv(gfile, index_col=("Chromosome", "Coordinate"))
+        genotypes_df = pd.read_csv(gfile, index_col=genoindex)
         if missing_geno is not None:
             genotypes_df.replace(missing_geno, pd.NA, inplace=True)
-        phenotypes_df = pd.read_csv(pfile, index_col="Sample_Name")
+        phenotypes_df = pd.read_csv(pfile, index_col=phenoindex)
 
         # reindexing makes phenotype sample order conform to genotype sample order
         # sample names in genotype header that don't exist get a NaN in the
@@ -150,6 +151,42 @@ def means_by_genotype(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
     )
 )
 @click.option(
+    "--colors",
+    "-c",
+    multiple=True,
+    help=(
+        "Specify colors for each chromosome. "
+        "Defaults to a cycling color scheme."
+    )
+)
+@click.option(
+    "--colormap",
+    type=str,
+    default="Dark2",
+    help=(
+        "Name of a matplotlib colormap to use for coloring chromosomes. "
+        "Defaults to 'Dark2'. Ignored if --colors is specified."
+    )
+)
+@click.option(
+    "--markersize",
+    type=float,
+    default=2,
+    help=(
+        "Size of the points to plot. Defaults to 2. "
+        "Increase for smaller datasets and decrease for larger datasets."
+    )
+)
+@click.option(
+    "--markeralpha",
+    type=float,
+    default=0.75,
+    help=(
+        "Alpha ransparency of the points to plot. Defaults to 0.75. "
+        "Decrease for more transparent points and increase for less transparent points."
+    )
+)
+@click.option(
     "--output",
     "-o",
     type=str,
@@ -163,7 +200,8 @@ def means_by_genotype(genodf, phenodf, focalpheno, genos=(0, 1), test="anova"):
 )
 @click.argument("statfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels):
+def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels, 
+         colors, colormap, markersize, markeralpha):
     """
     Create a "manhattan" style plot showing the -log(p-values) per site.
 
@@ -185,7 +223,11 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels):
     if bool(output):
         matplotlib.use("agg")
 
-    colorcycle = cycle(plt.cm.Dark2.colors)
+    if colors:
+        colorcycle = cycle(matplotlib.colors.ListedColormap(colors).colors)
+    else:
+        cmap = plt.get_cmap(colormap)
+        colorcycle = cycle(cmap .colors)
     fig, ax = plt.subplots(1, 1, figsize=dim)
 
     if threshold:
@@ -200,10 +242,10 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels):
         ax.plot(
             grp.Coordinate + offset,
             grp.log10Pvalue,
-            markersize=2,
+            markersize=markersize,
             marker="o",
             linestyle="None",
-            alpha=0.75,
+            alpha=markeralpha,
             color=next(colorcycle),
         )
         if (grp.Coordinate.max() + offset) > maxX:
@@ -403,10 +445,28 @@ def phenotype(genotypefile, phenotypefile, outfile, phenoname, genos):
     default="anova",
     help="Which statistical test of mean differences to apply. Defaults to ANOVA.",
 )
+@click.option(
+    "--genoindex",
+    type=tuple([str, str]),
+    default=("Chromosome", "Coordinate"),
+    help=(
+        "Column names in the genotype file to use as the index. "
+        "Defaults to 'Chromosome' and 'Coordinate'."
+    ),
+)    
+@click.option(
+    "--phenoindex",
+    type=str,
+    default="Sample_Name",
+    help=(
+        "Column name in the phenotype file to use as the index. "
+        "Defaults to 'Sample_Name'."
+    ),
+)
 @click.argument("genotypefile", type=click.Path(exists=True))
 @click.argument("phenotypefile", type=click.Path(exists=True))
 @click.argument("outfile", type=click.File("w"))
-def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test, missing_geno):
+def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test, missing_geno, genoindex, phenoindex):
     """
     Calculate association statistics between genotype and phenotype.
 
@@ -415,7 +475,7 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test, missing_
     OUTFILE is the name of the CSV file to write that contains p-values.
     A dash ('-') can be substituted OUTFILE to write to stdout.
     """
-    genodf, phenodf = load_files(genotypefile, phenotypefile, missing_geno)
+    genodf, phenodf = load_files(genotypefile, phenotypefile, missing_geno, genoindex, phenoindex)
     if phenoname == "":
         phenoname = phenodf.columns[0]
 
@@ -430,93 +490,6 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test, missing_
     assoc.to_csv(outfile)
 
 
-def permuted_assoc(genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10, q = 0.95):
-    max_log10 = []
-    quant_log10 = []
-    for i in range(n):
-        phenodf[focalpheno] = np.random.permutation(phenodf[focalpheno])
-        stats = assoc_test_pandarallel(genodf, phenodf, focalpheno, genos, test)
-        max_log10.append(float(stats.log10Pvalue.max()))
-        quant_log10.append(float(stats.log10Pvalue.quantile(q)))
-    return max_log10, quant_log10
-
-
-def permuted_assoc2(outfile, genodf, phenodf, focalpheno, genos=(0, 1), test="anova", n = 10, q = 0.95):
-    for i in range(n):
-        phenodf[focalpheno] = np.random.permutation(phenodf[focalpheno])
-        tstats = assoc_test_pandarallel(genodf, phenodf, focalpheno, genos, test)
-        qthresh = float(tstats.log10Pvalue.quantile(q))
-        above_threshold = tstats.log10Pvalue[tstats.log10Pvalue >= qthresh]
-        df = pd.DataFrame({
-            "extreme_log10Pval":above_threshold})   
-        df.to_csv(outfile, index=False, mode="a", header=False)
-    #return above_threshold
-
-        
-
-
-@cli.command()
-@click.option(
-    "--phenoname",
-    "-p",
-    type=str,
-    default="",
-    help=(
-        "Name of the phenotype column to analyze. "
-        "Defaults to first column other than Sample_Name."
-    ),
-)
-@click.option(
-    "--genos",
-    type=click.Choice(["01", "012", "-11"]),
-    default="01",
-    help="Genotype states that are used for analysis.",
-)
-@click.option(
-    "--test",
-    type=click.Choice(assoc_test_dict.keys()),
-    default="anova",
-    help="Which statistical test of mean differences to apply. Defaults to ANOVA.",
-)
-@click.option(
-    '-n',
-    type=int,
-    default=500,
-    help="Number of permutations to run for estimating EVD of log10 Pvals. Default=500."
-)
-@click.option(
-    '-q',
-    type=click.FloatRange(0,1),
-    default=0.95,
-    help="Quantile threshold for EVD of log10 Pvals. Default=0.95."
-)
-@click.argument("genotypefile", type=click.Path(exists=True))
-@click.argument("phenotypefile", type=click.Path(exists=True))
-@click.argument("outfile", type=click.File("w"))
-def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n, q):
-    """
-    Calculate max and quant log10 Pvals of permuted  datasets.
-    """
-    genodf, phenodf = load_files(genotypefile, phenotypefile)
-    if phenoname == "":
-        phenoname = phenodf.columns[0]
-
-    if genos == "012":
-        genotup = (0, 1, 2)
-    elif genos == "-11":
-        genotup = (-1, 1)
-    else:
-        genotup = (0, 1)
-
-
-    #max_log10pvals, quant_log10pvals = permuted_assoc(genodf, phenodf, phenoname, genos=genotup, test=test, n=n, q=q)
-    # maxdf = pd.DataFrame({
-    #     "max_log10Pval":max_log10pvals,
-    #     "quant_log10Pval":quant_log10pvals})
-    permuted_assoc2(outfile, genodf, phenodf, phenoname, genos=genotup, test=test, n=n, q=q)
-    #maxdf = pd.DataFrame({
-    #    "extreme_log10Pval":extremes})    
-    #maxdf.to_csv(outfile, index=False)    
 
 
 @cli.command()
@@ -525,7 +498,7 @@ def permute(genotypefile, phenotypefile, outfile, phenoname, genos, test, n, q):
 def report(genotypefile, phenotypefile):
     """Report on the number of samples and variable sites in the genotype and phenotype files.
 
-    Gives both raw numbers and number in the intersection of samples in both files.
+    Gives both raw numbers and number in the intersection of samples in both files. Also reports the names of the phenotypes in the phenotype file.
     """
     genodf = pd.read_csv(genotypefile, index_col=("Chromosome", "Coordinate"))
     phenodf = pd.read_csv(phenotypefile, index_col="Sample_Name")
@@ -533,10 +506,12 @@ def report(genotypefile, phenotypefile):
     n_raw_pheno_samples = len(phenodf)
     n_raw_geno_sites = len(genodf)
     n_sample_intersection = len(set(genodf.columns).intersection(set(phenodf.index)))
+    pheno_names = phenodf.columns.tolist()
     click.echo(f"Number of samples in genotype file: {n_raw_geno_samples}")
     click.echo(f"Number of samples in phenotype file: {n_raw_pheno_samples}")
     click.echo(f"Number of samples in intersection of genotype and phenotype files: {n_sample_intersection}")
     click.echo(f"Number of variable sites in genotype file: {n_raw_geno_sites}")
+    click.echo(f"Phenotypes ({len(pheno_names)} total): {', '.join(pheno_names)}")
     
 
 
