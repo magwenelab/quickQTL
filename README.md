@@ -1,6 +1,6 @@
 # quickQTL
 
-Simple marker-regression style QTL mapping based on per-site test of mean differences by genotype (defaults to ANOVA). 
+Simple marker-regression style QTL mapping. 
 
 ## Example usage
 
@@ -9,6 +9,7 @@ Generate a file giving F-statistics and p-values on a per site basis:
 ```bash
 ./quickQTL.py stats example-geno-table.csv example-pheno-table.csv example.out
 ```
+
 
 Generate an Matplotlib interactive plot from the output of the command above.
 
