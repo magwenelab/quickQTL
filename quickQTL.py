@@ -39,6 +39,62 @@ def load_files(genotypefile, phenotypefile, missing_geno=None,
         return genotypes_df, phenotypes_df
 
 
+
+def subset_by_genotype_state(genodf, phenodf, chrom, coord, genos=(0, 1), missing_geno=pd.NA, drop_missing=True):
+    """
+    Subset the genotype and phenotype dataframes by the genotype states in genos at the specified chrom and coord in genodf. Returns two dictionaries of dataframes, one for each dataframe. The keys of the dictionary are the genotype states in genos plus "missing".
+    """
+    genorow = genodf.loc[(chrom, coord)]
+    genos_by_geno, phenos_by_geno = {}, {}
+    for geno in genos:
+        samples_with_geno = genorow == geno
+        genos_by_geno[str(geno)] = genodf.loc[:, samples_with_geno]
+        phenos_by_geno[str(geno)] = phenodf.loc[samples_with_geno]
+        if drop_missing:
+            phenos_by_geno[str(geno)] = phenos_by_geno[str(geno)].dropna()
+    phenos_by_geno["missing"] = phenodf.loc[genorow == missing_geno]
+    genos_by_geno["missing"] = genodf.loc[:, genorow == missing_geno]
+    return genos_by_geno, phenos_by_geno       
+
+@cli.command()
+@click.option(
+    "--genos",
+    type=click.Choice(["01", "012", "-11"]),
+    default="01",
+    help="Genotype states that are used for analysis.",
+)
+@click.option(
+    "--missing_geno",
+    type=int,
+    default=-1,
+    help="Indicator used to delineate missing genotypes."
+)
+@click.argument("genotypefile", type=click.Path(exists=True))
+@click.argument("phenotypefile", type=click.Path(exists=True))
+@click.argument("chrom", type=str)
+@click.argument("coord", type=int)
+@click.argument("outprefix", type=str)
+def subset_by_allele(genotypefile, phenotypefile, chrom, coord, outprefix, genos="01", missing_geno=pd.NA, drop_missing=True):
+    """
+    Subset the genotype and phenotype dataframes by the genotype states in genos at the specified chrom and coord in genodf. Returns two dictionaries of dataframes, one for each dataframe. The keys of the dictionary are the genotype states in genos plus "missing".
+    """
+
+    if genos == "012":
+        genos = (0, 1, 2)
+    elif genos == "-11":
+        genos = (-1, 1)
+    else:
+        genos = (0, 1)
+
+    genodf, phenodf = load_files(genotypefile, phenotypefile, missing_geno=missing_geno)
+    genosubs, phenosubs =  subset_by_genotype_state(genodf, phenodf, chrom, coord, genos=genos, 
+                                                    missing_geno=missing_geno, drop_missing=drop_missing)
+    for key in genosubs.keys():
+        genosubs[key].to_csv(f"{outprefix}_genotype_{key}.csv")
+        phenosubs[key].to_csv(f"{outprefix}_phenotype_{key}.csv", index_label="Sample_Name")
+
+
+
 assoc_test_dict = {
     "anova": stats.f_oneway,
     "alexander": stats.alexandergovern,
