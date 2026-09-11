@@ -283,7 +283,7 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels,
         colorcycle = cycle(matplotlib.colors.ListedColormap(colors).colors)
     else:
         cmap = plt.get_cmap(colormap)
-        colorcycle = cycle(cmap .colors)
+        colorcycle = cycle(cmap.colors)
     fig, ax = plt.subplots(1, 1, figsize=dim)
 
     if threshold:
@@ -340,6 +340,52 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels,
     ),
 )
 @click.option(
+    "--dim",
+    nargs=2,
+    type=float,
+    default=(12,4),
+    help=(
+        "Dimensions of the output figure in inches. "
+        "Defaults to 12 inches wide and 4 inches tall."
+    )
+)
+@click.option(
+    "--colors",
+    "-c",
+    multiple=True,
+    help=(
+        "Specify colors for each chromosome. "
+        "Defaults to a cycling color scheme."
+    )
+)
+@click.option(
+    "--colormap",
+    type=str,
+    default="Dark2",
+    help=(
+        "Name of a matplotlib colormap to use for coloring chromosomes. "
+        "Defaults to 'Dark2'. Ignored if --colors is specified."
+    )
+)
+@click.option(
+    "--markersize",
+    type=float,
+    default=2,
+    help=(
+        "Size of the points to plot. Defaults to 2. "
+        "Increase for smaller datasets and decrease for larger datasets."
+    )
+)
+@click.option(
+    "--markeralpha",
+    type=float,
+    default=0.75,
+    help=(
+        "Alpha ransparency of the points to plot. Defaults to 0.75. "
+        "Decrease for more transparent points and increase for less transparent points."
+    )
+)
+@click.option(
     "--diff",
     is_flag = True,
     help=(
@@ -348,7 +394,7 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels,
 )
 @click.argument("phenomeanfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def plot_phenotype(phenomeanfile, chromfile, output, diff):
+def plot_phenotype(phenomeanfile, chromfile, output, dim, colors, colormap, markersize, markeralpha, diff):
     """
     Create a "manhattan" style plot showing the allele-specific means per site.
 
@@ -370,9 +416,12 @@ def plot_phenotype(phenomeanfile, chromfile, output, diff):
     if bool(output):
         matplotlib.use("agg")
 
-    colorcycle = cycle(plt.cm.Dark2.colors)
-    fig, ax = plt.subplots(1, 1)
-
+    if colors:
+        colorcycle = cycle(matplotlib.colors.ListedColormap(colors).colors)
+    else:
+        cmap = plt.get_cmap(colormap)
+        colorcycle = cycle(cmap.colors)
+    fig, ax = plt.subplots(1, 1, figsize=dim)
     ct = 0
     for chrom in chroms.index:
         grp = grouped_stats.get_group(chrom)
@@ -381,10 +430,10 @@ def plot_phenotype(phenomeanfile, chromfile, output, diff):
             ax.plot(
                 grp.Coordinate + chroms.loc[chrom, "Offset"],
                 grp.alt_mean - grp.ref_mean,
-                markersize=2,
+                markersize=markersize,
                 marker="o",
                 linestyle="None",
-                alpha=0.75,
+                alpha=markeralpha,
                 color=clr,
             )            
 
@@ -421,8 +470,10 @@ def plot_phenotype(phenomeanfile, chromfile, output, diff):
         ax.set_ylabel(r"Allele-specific means")
 
     if bool(output):
+        plt.tight_layout()
         plt.savefig(output, format="png", dpi=600)
     else:
+        plt.tight_layout()
         plt.show()
 
 
@@ -570,6 +621,35 @@ def report(genotypefile, phenotypefile):
     click.echo(f"Phenotypes ({len(pheno_names)} total): {', '.join(pheno_names)}")
     
 
+@cli.command()
+@click.option(
+    "--genoindex",
+    type=tuple([str, str]),
+    default=("Chromosome", "Coordinate"),
+    help=(
+        "Column names in the genotype file to use as the index. "
+        "Defaults to 'Chromosome' and 'Coordinate'."
+    ),
+)  
+@click.argument("genotypefile", type=click.Path(exists=True))
+@click.argument("chromosome", type=str)
+@click.argument("start", type=int)
+@click.argument("end", type=int)
+@click.argument("outfile", type=click.File("w"))
+def genotype_interval(genotypefile, chromosome, start, end, outfile, genoindex):
+    """Subset the genotype file by a specified region of a chromosome.
+
+    GENOTYPEFILE is a CSV file. See README for formatting.
+
+    CHROMOSOME is the name of the chromosome to subset.
+
+    START is the starting coordinate of the region to subset.
+
+    END is the ending coordinate of the region to subset.
+    """
+    genodf = pd.read_csv(genotypefile, index_col=genoindex)
+    subset_df = genodf.loc[(chromosome, slice(start, end)), :]
+    subset_df.to_csv(outfile)
 
 
 if __name__ == "__main__":
