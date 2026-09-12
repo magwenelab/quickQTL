@@ -598,7 +598,6 @@ def stats(genotypefile, phenotypefile, outfile, phenoname, genos, test, missing_
 
 
 
-
 @cli.command()
 @click.argument("genotypefile", type=click.Path(exists=True))
 @click.argument("phenotypefile", type=click.Path(exists=True))
@@ -650,6 +649,16 @@ def genotype_interval(genotypefile, chromosome, start, end, outfile, genoindex):
     genodf = pd.read_csv(genotypefile, index_col=genoindex)
     subset_df = genodf.loc[(chromosome, slice(start, end)), :]
     subset_df.to_csv(outfile)
+
+
+def genotype_and(genodf, *genotups):
+    genosets = []
+    for genotup in genotups:
+        match = genodf.loc[genotup[:2],:] == genotup[2]
+        genosets.append(set(match[match].index))
+    return genosets[0].intersection(*genosets[1:])
+
+
 
 
 if __name__ == "__main__":
