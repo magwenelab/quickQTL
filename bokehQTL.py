@@ -23,6 +23,7 @@ from bokeh.models import (
     TapTool,
     HoverTool,
     OpenURL,
+    BoxZoomTool,
 )
 
 from bokeh.embed import file_html
@@ -95,7 +96,7 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
         x_axis_label="Coordinate",
         y_axis_label="",
         sizing_mode="stretch_width",
-        tools="pan,box_zoom,reset,save",
+        tools="reset,save",
     )
 
     xs, ys = [], []
@@ -130,7 +131,7 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
         ("Desc", "@FtrDesc"),
     ]
     patches = fig.patches("xs", "ys", alpha=0.5, source=ftrsource)
-    fig.add_tools(HoverTool(renderers=[patches], tooltips=TOOLTIPS_patches, mode="mouse"))
+    fig.add_tools(HoverTool(renderers=[patches], tooltips=TOOLTIPS_patches))
 
     tool = TapTool(renderers = [patches], behavior="select", mode="replace",
                    callback=OpenURL(url="@FtrURL"))
@@ -161,9 +162,9 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
     fig.xaxis[0].formatter = NumeralTickFormatter(format="0,0")
 
     fig.add_tools(WheelZoomTool(dimensions="width"))
+    fig.add_tools(BoxZoomTool(dimensions="both"))
+    fig.add_tools(PanTool(dimensions="width"))
 
-    pantool = fig.select_one({"type": PanTool})
-    pantool.dimensions = "width"
 
     bplt.show(fig)
 
