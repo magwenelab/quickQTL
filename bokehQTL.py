@@ -20,7 +20,9 @@ from bokeh.models import (
     NumeralTickFormatter,
     WheelZoomTool,
     PanTool,
+    TapTool,
     HoverTool,
+    OpenURL,
 )
 
 from bokeh.embed import file_html
@@ -106,7 +108,6 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
         xs.append(x)
         ys.append(y)
 
-    print(list(gff.Name))
     ftrsource = ColumnDataSource(
         dict(
             xs=xs,
@@ -115,6 +116,7 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
             FtrID=gff.FtrID,
             FtrName=[i if pd.notnull(i) else "none" for i in gff.Name],
             FtrDesc = [urlparse.unquote(i) if pd.notnull(i) else "none" for i in gff.Description],
+            FtrURL = [f"https://www.ncbi.nlm.nih.gov/gene/?term={i}" for i in gff.FtrID],
             start=gff.Start,
             end=gff.End,
         )
@@ -125,10 +127,13 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
         ("Name", "@FtrName"),
         ("Type", "@FtrType"),
         ("start:end", "@start:@end"),
-        ("Desc", "@FtrDesc")
+        ("Desc", "@FtrDesc"),
     ]
     patches = fig.patches("xs", "ys", alpha=0.5, source=ftrsource)
     fig.add_tools(HoverTool(renderers=[patches], tooltips=TOOLTIPS_patches, mode="mouse"))
+
+    tool = TapTool(renderers = [patches], modifiers="shift", callback=OpenURL(url="@FtrURL"))
+    fig.add_tools(tool)
 
 
     statsource = ColumnDataSource(
