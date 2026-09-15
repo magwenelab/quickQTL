@@ -132,7 +132,8 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
     patches = fig.patches("xs", "ys", alpha=0.5, source=ftrsource)
     fig.add_tools(HoverTool(renderers=[patches], tooltips=TOOLTIPS_patches, mode="mouse"))
 
-    tool = TapTool(renderers = [patches], modifiers="shift", callback=OpenURL(url="@FtrURL"))
+    tool = TapTool(renderers = [patches], behavior="select", mode="replace",
+                   callback=OpenURL(url="@FtrURL"))
     fig.add_tools(tool)
 
 
