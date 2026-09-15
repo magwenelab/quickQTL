@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
 import itertools
+import urllib.parse as urlparse
 from json import tool
 
 
 import pandas as pd
 import numpy as np
 
+import bokeh
 import bokeh.plotting as bplt
 import bokeh.palettes as palletes
 from bokeh.transform import factor_cmap
@@ -20,6 +22,10 @@ from bokeh.models import (
     PanTool,
     HoverTool,
 )
+
+from bokeh.embed import file_html
+from bokeh.resources import CDN
+
 
 import click
 
@@ -78,6 +84,7 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
     
     gff = gff[(gff.Seqid == focalchrom) & ((gff.Type == "gene") | (gff.Type == "protein_coding_gene"))]
     gff["FtrID"] = gff.Attributes.str.extract(r"ID=([^;]+);")
+    gff["Name"] = gff.Attributes.str.extract(r"Name=([^;]+);")
     gff["Description"] = gff.Attributes.str.extract(r"description=([^;]+);")
 
 
@@ -99,13 +106,15 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
         xs.append(x)
         ys.append(y)
 
+    print(list(gff.Name))
     ftrsource = ColumnDataSource(
         dict(
             xs=xs,
             ys=ys,
             FtrType=gff.Type,
             FtrID=gff.FtrID,
-            FtrDesc = gff.Description,
+            FtrName=[i if pd.notnull(i) else "none" for i in gff.Name],
+            FtrDesc = [urlparse.unquote(i) if pd.notnull(i) else "none" for i in gff.Description],
             start=gff.Start,
             end=gff.End,
         )
@@ -113,6 +122,7 @@ def chromosome_plot(statfile, chromfile, gfffile, nchrom):
 
     TOOLTIPS_patches = [
         ("ID", "@FtrID"),
+        ("Name", "@FtrName"),
         ("Type", "@FtrType"),
         ("start:end", "@start:@end"),
         ("Desc", "@FtrDesc")
@@ -195,25 +205,33 @@ def manhattan_plot(statsdf, chromsdf, src):
 
     p.scatter(x="PlotCoordinate", y="Log10Pvalue", color = cmapper, source=src)
 
-
-
     bplt.show(p)
 
 
 @cli.command()
+@click.option("--output", "-o", type=str, default=None, help="Output HTML file for the manhattan plot. If not specified, will write to manhattan_plot.html.")
 @click.argument("statfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def genomewide(statfile, chromfile):
+def genomewide(statfile, chromfile, output):
     stats, chroms, src = create_data(statfile, chromfile)
+    if output:
+        bokeh.io.output_file(output, mode='inline')
+    else:
+        bokeh.io.output_file("manhattan_plot.html", mode='inline')
     manhattan_plot(stats, chroms, src)
 
 
 @cli.command()
+@click.option("--output", "-o", type=str, default=None, help="Output HTML file for the manhattan plot. If not specified, will write to chromosome_plot.html.")
 @click.option("--nchrom", "-n", type=int, default=1)
 @click.argument("statfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
 @click.argument("gfffile", type=click.File("r"))
-def chromosome(statfile, chromfile, gfffile, nchrom):
+def chromosome(statfile, chromfile, gfffile, nchrom, output):
+    if output:
+        bokeh.io.output_file(output, mode='inline')
+    else:
+        bokeh.io.output_file("chromosome_plot.html", mode='inline')
     chromosome_plot(statfile, chromfile, gfffile, nchrom)
 
 

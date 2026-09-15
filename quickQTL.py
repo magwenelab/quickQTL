@@ -340,6 +340,18 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels,
     ),
 )
 @click.option(
+    "--rotlabels",
+    is_flag = True,
+)
+@click.option(
+    "--ylim",
+    type=float,
+    default=None,
+    help=(
+        "Specifies maximum value of the y-axis for plotting consistency. "
+    )
+)
+@click.option(
     "--dim",
     nargs=2,
     type=float,
@@ -394,7 +406,7 @@ def plot(statfile, chromfile, output, ylim, dim,threshold, rotlabels,
 )
 @click.argument("phenomeanfile", type=click.File("r"))
 @click.argument("chromfile", type=click.File("r"))
-def plot_phenotype(phenomeanfile, chromfile, output, dim, colors, colormap, markersize, markeralpha, diff):
+def plot_phenotype(phenomeanfile, chromfile, output, ylim, dim, rotlabels, colors, colormap, markersize, markeralpha, diff):
     """
     Create a "manhattan" style plot showing the allele-specific means per site.
 
@@ -422,13 +434,15 @@ def plot_phenotype(phenomeanfile, chromfile, output, dim, colors, colormap, mark
         cmap = plt.get_cmap(colormap)
         colorcycle = cycle(cmap.colors)
     fig, ax = plt.subplots(1, 1, figsize=dim)
-    ct = 0
+
+    maxX = 0
     for chrom in chroms.index:
         grp = grouped_stats.get_group(chrom)
-        clr = color=next(colorcycle)
+        clr = next(colorcycle)
+        offset = chroms.loc[chrom, "Offset"]
         if diff:
             ax.plot(
-                grp.Coordinate + chroms.loc[chrom, "Offset"],
+                grp.Coordinate + offset,
                 grp.alt_mean - grp.ref_mean,
                 markersize=markersize,
                 marker="o",
@@ -436,12 +450,11 @@ def plot_phenotype(phenomeanfile, chromfile, output, dim, colors, colormap, mark
                 alpha=markeralpha,
                 color=clr,
             )            
-
         else:
             ax.plot(
-                grp.Coordinate + chroms.loc[chrom, "Offset"],
+                grp.Coordinate + offset,
                 grp.ref_mean,
-                markersize=4,
+                markersize=markersize,
                 marker="o",
                 fillstyle="none",
                 linestyle="None",
@@ -449,14 +462,16 @@ def plot_phenotype(phenomeanfile, chromfile, output, dim, colors, colormap, mark
                 color=clr,
             )
             ax.plot(
-                grp.Coordinate + chroms.loc[chrom, "Offset"],
+                grp.Coordinate + offset,
                 grp.alt_mean,
-                markersize=4,
+                markersize=markersize,
                 marker="x",
                 linestyle="None",
                 alpha=0.75,
                 color=clr,
-            )        
+            )     
+        if (grp.Coordinate.max() + offset) > maxX:
+            maxX = grp.Coordinate.max() + offset               
     ax.set_xticks(chroms.Midpoint, labels=chroms.index)
     ax.set_xticks(chroms.Endpoint, minor=True)
     #ax.set_xlabel("Coordinates")
@@ -465,9 +480,15 @@ def plot_phenotype(phenomeanfile, chromfile, output, dim, colors, colormap, mark
         max_x = max(*ax.get_xlim())
         ax.set_ylim(-max_abs_diff, max_abs_diff)
         ax.set_ylabel(r"Alt_mean - Ref_mean")
-        ax.hlines(y = 0, xmin = 0, xmax = max_x, linestyle = "dashed", color = "black")
+        ax.axhline(y = 0, linestyle = "dashed", color = "black")
     else:
         ax.set_ylabel(r"Allele-specific means")
+
+    if ylim:
+        ax.set_ylim(0, ylim)
+
+    if rotlabels:
+        ax.tick_params(axis='x', labelrotation=45)
 
     if bool(output):
         plt.tight_layout()
